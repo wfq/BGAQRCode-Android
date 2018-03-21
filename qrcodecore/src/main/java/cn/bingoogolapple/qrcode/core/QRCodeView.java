@@ -1,6 +1,8 @@
 package cn.bingoogolapple.qrcode.core;
 
 import android.content.Context;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.hardware.Camera;
 import android.os.Handler;
 import android.text.TextUtils;
@@ -8,7 +10,10 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.widget.RelativeLayout;
 
-public abstract class QRCodeView extends RelativeLayout implements Camera.PreviewCallback, ProcessDataTask.Delegate {
+import java.util.ArrayList;
+import java.util.List;
+
+public abstract class QRCodeView extends RelativeLayout implements Camera.PreviewCallback, ProcessDataTask.Delegate, ScanBoxView.ScanBoxListener {
     protected Camera mCamera;
     protected CameraPreview mPreview;
     protected ScanBoxView mScanBoxView;
@@ -32,6 +37,7 @@ public abstract class QRCodeView extends RelativeLayout implements Camera.Previe
         mPreview = new CameraPreview(getContext());
 
         mScanBoxView = new ScanBoxView(getContext());
+        mScanBoxView.setScanBoxListener(this);
         mScanBoxView.initCustomAttrs(context, attrs);
         mPreview.setId(R.id.bgaqrcode_camera_preview);
         addView(mPreview);
@@ -281,6 +287,62 @@ public abstract class QRCodeView extends RelativeLayout implements Camera.Previe
             }
         }
     };
+
+    /**
+     * 计算扫码区域
+     * @param scanBox   扫码框
+     * @param coefficient   比率
+     * @param previewSize
+     * @return
+     */
+    private Rect calculateFocusArea(Rect scanBox, float coefficient, Camera.Size previewSize) {
+        int width = (int) (scanBox.width() * coefficient);
+        int height = (int) (scanBox.height() * coefficient);
+        float scanCenterX = scanBox.centerY();
+        float scanCenterY = scanBox.centerX();
+        int centerX = (int) (scanCenterX / previewSize.width * 2000 - 1000);
+        int centerY = (int) (scanCenterY / previewSize.height * 2000 - 1000);
+        int left = clamp(centerX - (height / 2), -1000, 1000);
+        int top = clamp(centerY - (width / 2), -1000, 1000);
+        RectF rectF = new RectF(left, top, left + height, top + width);
+        return new Rect(Math.round(rectF.left), Math.round(rectF.top),
+                Math.round(rectF.right), Math.round(rectF.bottom));
+    }
+
+    private int clamp(int x, int min, int max) {
+        if (x > max) {
+            return max;
+        }
+        if (x < min) {
+            return min;
+        }
+        return x;
+    }
+
+    @Override
+    public void onScanBoxRectChanged(Rect rect) {
+        if (mCamera != null && rect.left > 0 && rect.top > 0) {
+            final Camera.Parameters parameters = mCamera.getParameters();
+            Rect focusRect = calculateFocusArea(rect, 1f, parameters.getPreviewSize());
+            Rect meteringRect = calculateFocusArea(rect, 1.5f, parameters.getPreviewSize());
+            if (parameters.getMaxNumFocusAreas() > 0) {
+                List<Camera.Area> focusAreas = new ArrayList<>();
+                focusAreas.add(new Camera.Area(focusRect, 1000));
+                parameters.setFocusAreas(focusAreas);
+            }
+            if (parameters.getMaxNumMeteringAreas() > 0) {
+                List<Camera.Area> meteringAreas = new ArrayList<>();
+                meteringAreas.add(new Camera.Area(meteringRect, 1000));
+                parameters.setMeteringAreas(meteringAreas);
+            }
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    mCamera.setParameters(parameters);
+                }
+            }, 500);
+        }
+    }
 
     public interface Delegate {
         /**

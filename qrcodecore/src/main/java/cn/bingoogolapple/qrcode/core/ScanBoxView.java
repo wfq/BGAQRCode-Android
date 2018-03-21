@@ -77,6 +77,8 @@ public class ScanBoxView extends View {
 
     private boolean mIsOnlyDecodeScanBoxArea;
 
+    private ScanBoxListener mScanBoxListener;
+
     public ScanBoxView(Context context) {
         super(context);
         mPaint = new Paint();
@@ -252,6 +254,10 @@ public class ScanBoxView extends View {
         // 移动扫描线的位置
         moveScanLine();
 
+    }
+
+    public void setScanBoxListener(ScanBoxListener scanBoxListener) {
+        this.mScanBoxListener = scanBoxListener;
     }
 
     /**
@@ -489,6 +495,9 @@ public class ScanBoxView extends View {
             mGridScanLineRight = mScanLineLeft = mFramingRect.left + mHalfCornerSize + 0.5f;
         } else {
             mGridScanLineBottom = mScanLineTop = mFramingRect.top + mHalfCornerSize + 0.5f;
+        }
+        if (mScanBoxListener != null) {
+            mScanBoxListener.onScanBoxRectChanged(mFramingRect);
         }
     }
 
@@ -837,5 +846,10 @@ public class ScanBoxView extends View {
 
     public void setOnlyDecodeScanBoxArea(boolean onlyDecodeScanBoxArea) {
         mIsOnlyDecodeScanBoxArea = onlyDecodeScanBoxArea;
+    }
+
+    interface ScanBoxListener {
+
+        void onScanBoxRectChanged(Rect rect);
     }
 }
